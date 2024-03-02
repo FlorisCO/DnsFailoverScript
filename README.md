@@ -1,4 +1,4 @@
-For the usage of the check.sh script please change the followinf variables to match your needs 
+For the usage of the check.sh script please change the following variables to match your needs 
 
 HOST="test.example.com"
 
