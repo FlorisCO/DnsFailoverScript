@@ -11,7 +11,7 @@ BACKUP_IP="BACKUP_IP"
 #Status file determing latest state
 STATUS_FILE="./status.txt"
 CURRENT_STATUS=$(cat "$STATUS_FILE")
-DNSRECORDID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=A&name=$DNSRECORD" \
+DNS_RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=A&name=$DNSRECORD" \
         -H "Authorization: Bearer $API_TOKEN" \
         -H "Content-Type: application/json" | jq -r '{"result"}[] | .[0] | .id')
 DNS_CONTENT=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=A&name=$DNSRECORD" \
@@ -43,7 +43,7 @@ FAILED_STATUS="BACKUP"
 
 #------Debug-------
 #Uncomment to check status of dns record ID
-#echo "DNSRECORDID for $DNSRECORD is $DNSRECORDID"
+#echo "DNS_RECORD_ID for $DNS_RECORD is $DNS_RECORD_ID"
 #----end Debug------
 # Check TCP port availability
 if netcat -v -w 3 "$HOST" "$TCP_PORT" &> /dev/null; then
@@ -53,10 +53,10 @@ if netcat -v -w 3 "$HOST" "$TCP_PORT" &> /dev/null; then
                 if netcat -v -w 3 "$HOST" "$TCP_PORT" &> /dev/null; then
                         echo "Status has changed. Updating DNS record to PROD..."
                         # Update DNS record to point to the desired destination
-                        curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNSRECORDID" \
+                        curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_RECORD_ID" \
                         -H "Authorization: Bearer $API_TOKEN" \
                         -H "Content-Type: application/json" \
-                        --data "{\"type\":\"A\",\"name\":\"$DNSRECORD\",\"content\":\"$PROD_IP\",\"ttl\":1,\"proxied\":false}" | jq
+                        --data "{\"type\":\"A\",\"name\":\"$DNS_RECORD\",\"content\":\"$PROD_IP\",\"ttl\":1,\"proxied\":false}" | jq
                         set_current_status "$CURRENT_STATUS"
                 fi
         fi
@@ -70,10 +70,10 @@ else
                 if netcat -v -w 3 "$HOST" "$TCP_PORT" &> /dev/null; then
                         echo "Status has changed. Updating DNS record to PROD..."
                         # Update DNS record to point to the desired destination
-                        curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNSRECORDID" \
+                        curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_RECORD_ID" \
                         -H "Authorization: Bearer $API_TOKEN" \
                         -H "Content-Type: application/json" \
-                        --data "{\"type\":\"A\",\"name\":\"$DNSRECORD\",\"content\":\"$PROD_IP\",\"ttl\":1,\"proxied\":false}" | jq
+                        --data "{\"type\":\"A\",\"name\":\"$DNS_RECORD\",\"content\":\"$PROD_IP\",\"ttl\":1,\"proxied\":false}" | jq
                         set_current_status "$CURRENT_STATUS"
                 else
                         if [ "$CURRENT_RECORD" == "$BACKUP_IP" ]; then
@@ -82,10 +82,10 @@ else
                                 echo "Status has changed. Updating DNS record to BACKUP"
                                 echo "TCP port $TCP_PORT is unreachable."
                                 # Update DNS record to point to an alternate IP
-                                curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNSRECORDID" \
+                                curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_RECORD_ID" \
                                 -H "Authorization: Bearer $API_TOKEN" \
                                 -H "Content-Type: application/json" \
-                                --data "{\"type\":\"A\",\"name\":\"$DNSRECORD\",\"content\":\"$BACKUP_IP\",\"ttl\":1,\"proxied\":false}" | jq
+                                --data "{\"type\":\"A\",\"name\":\"$DNS_RECORD\",\"content\":\"$BACKUP_IP\",\"ttl\":1,\"proxied\":false}" | jq
                                 set_current_status "$FAILED_STATUS"
                         fi
                 fi
