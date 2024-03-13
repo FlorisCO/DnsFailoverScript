@@ -1,23 +1,23 @@
 #!/bin/bash
 
 HOST="test.example.com"
-TCP_PORT="[PORTNR]"
+TCP_PORT="PORTNR"
 # Cloudflare API details
-API_TOKEN="[CLOUDFLARE_API_TOKEN]"
-ZONE_ID="[CLOUDFLARE_ZONE_ID]"
-dnsrecord="[DNS_RECORD]"
-NEW_IP_ON_SUCCESS="[ORIGINAL_IP]"
-ALTERNATE_IP_ON_FAILURE="[BACKUP_IP]"
+API_TOKEN="CLOUDFLARE_API_TOKEN"
+ZONE_ID="CLOUDFLARE_ZONE_ID"
+DNSRECORD="DNS_RECORD"
+PROD_IP="ORIGINAL_IP"
+BACKUP_IP="BACKUP_IP"
 #Status file determing latest state
 STATUS_FILE="./status.txt"
-current_status=$(cat "$STATUS_FILE")
-dnsrecordid=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=A&name=$dnsrecord" \
+CURRENT_STATUS=$(cat "$STATUS_FILE")
+DNSRECORDID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=A&name=$DNSRECORD" \
         -H "Authorization: Bearer $API_TOKEN" \
         -H "Content-Type: application/json" | jq -r '{"result"}[] | .[0] | .id')
-dns_content=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=A&name=$dnsrecord" \
+DNS_CONTENT=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=A&name=$DNSRECORD" \
        -H "Authorization: Bearer $API_TOKEN" \
        -H "Content-Type: application/json"| jq -r '{"result"}[] | .[0] | .content')
-current_record=$(echo "$dns_content")
+CURRENT_RECORD=$(echo "$DNS_CONTENT")
 #Function to check the status file
 get_previous_status() {
     if [ -f "$STATUS_FILE" ]; then
@@ -29,64 +29,64 @@ get_previous_status() {
 
 # Function to set the current status
 set_current_status() {
-    local new_status="$1"
-    echo "$new_status" > "$STATUS_FILE"
-    echo "Status set to: $new_status"
+    local NEW_STATUS="$1"
+    echo "$NEW_STATUS" > "$STATUS_FILE"
+    echo "Status set to: $NEW_STATUS"
 }
 
 previous_status=$(get_previous_status)
 echo "Previous status: $previous_status"
 
 # Assume you've determined the current status (e.g., from an external source)
-current_status="PROD"
-failed_status="FAILURE"
+CURRENT_STATUS="PROD"
+FAILED_STATUS="BACKUP"
 
 #------Debug-------
 #Uncomment to check status of dns record ID
-#echo "DNSrecordid for $dnsrecord is $dnsrecordid"
+#echo "DNSRECORDID for $DNSRECORD is $DNSRECORDID"
 #----end Debug------
 # Check TCP port availability
 if netcat -v -w 3 "$HOST" "$TCP_PORT" &> /dev/null; then
         echo "TCP port $TCP_PORT for $HOST is reachable."
         echo "PROD" > "$STATUS_FILE"
-        if [ "$current_status" != "$previous_status" ]; then
+        if [ "$CURRENT_STATUS" != "$previous_status" ]; then
                 if netcat -v -w 3 "$HOST" "$TCP_PORT" &> /dev/null; then
                         echo "Status has changed. Updating DNS record to PROD..."
                         # Update DNS record to point to the desired destination
-                        curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$dnsrecordid" \
+                        curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNSRECORDID" \
                         -H "Authorization: Bearer $API_TOKEN" \
                         -H "Content-Type: application/json" \
-                        --data "{\"type\":\"A\",\"name\":\"$dnsrecord\",\"content\":\"$NEW_IP_ON_SUCCESS\",\"ttl\":1,\"proxied\":false}" | jq
-                        set_current_status "$current_status"
+                        --data "{\"type\":\"A\",\"name\":\"$DNSRECORD\",\"content\":\"$PROD_IP\",\"ttl\":1,\"proxied\":false}" | jq
+                        set_current_status "$CURRENT_STATUS"
                 fi
         fi
 
 else
 #       echo "TCP port $TCP_PORT for $HOST is unreachable."
-        echo "FAILURE" > "$STATUS_FILE"
+        echo "BACKUP" > "$STATUS_FILE"
 
 # Check if the current status value has changed
-        if [ "$current_status" != "$previous_status" ]; then
+        if [ "$CURRENT_STATUS" != "$previous_status" ]; then
                 if netcat -v -w 3 "$HOST" "$TCP_PORT" &> /dev/null; then
                         echo "Status has changed. Updating DNS record to PROD..."
                         # Update DNS record to point to the desired destination
-                        curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$dnsrecordid" \
+                        curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNSRECORDID" \
                         -H "Authorization: Bearer $API_TOKEN" \
                         -H "Content-Type: application/json" \
-                        --data "{\"type\":\"A\",\"name\":\"$dnsrecord\",\"content\":\"$NEW_IP_ON_SUCCESS\",\"ttl\":1,\"proxied\":false}" | jq
-                        set_current_status "$current_status"
+                        --data "{\"type\":\"A\",\"name\":\"$DNSRECORD\",\"content\":\"$PROD_IP\",\"ttl\":1,\"proxied\":false}" | jq
+                        set_current_status "$CURRENT_STATUS"
                 else
-                        if [ "$current_record" == "$IP_ON_FAILURE" ]; then
+                        if [ "$CURRENT_RECORD" == "$BACKUP_IP" ]; then
                                 echo "not changing record"
                         else
                                 echo "Status has changed. Updating DNS record to BACKUP"
                                 echo "TCP port $TCP_PORT is unreachable."
                                 # Update DNS record to point to an alternate IP
-                                curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$dnsrecordid" \
+                                curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNSRECORDID" \
                                 -H "Authorization: Bearer $API_TOKEN" \
                                 -H "Content-Type: application/json" \
-                                --data "{\"type\":\"A\",\"name\":\"$dnsrecord\",\"content\":\"$IP_ON_FAILURE\",\"ttl\":1,\"proxied\":false}" | jq
-                                set_current_status "$failed_status"
+                                --data "{\"type\":\"A\",\"name\":\"$DNSRECORD\",\"content\":\"$BACKUP_IP\",\"ttl\":1,\"proxied\":false}" | jq
+                                set_current_status "$FAILED_STATUS"
                         fi
                 fi
         fi
